@@ -400,6 +400,63 @@ const deleteAttendance = async (req, res) => {
     fail(res, 'Internal server error.', 500);
   }
 };
+// ─── PUT /api/attendance/session/:sessionId — Bulk update attendance ──────────
+// Teacher can mark/unmark students for a past session
+
+const bulkUpdateSessionAttendance = async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const updates = req.body; // [{ userId, status }]
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return fail(res, 'Request body must be a non-empty array of { userId, status }.');
+    }
+
+    const session = await Session.findByPk(sessionId);
+    if (!session) {
+      return fail(res, 'Session not found.', 404);
+    }
+
+    const { classId, lecture } = session;
+    const date = session.createdAt.toISOString().split('T')[0];
+
+    // Validate all userIds belong to this class
+    const enrolledIds = new Set(
+      (await StudentClass.findAll({
+        where: { classId },
+        attributes: ['studentId'],
+        raw: true,
+      })).map((r) => r.studentId || r.student_id)
+    );
+
+    for (const { userId, status } of updates) {
+      if (!enrolledIds.has(userId)) continue; // skip non-enrolled
+      if (!['present', 'absent'].includes(status)) continue; // skip invalid
+
+      const existing = await Attendance.findOne({
+        where: { userId, sessionId },
+      });
+
+      if (existing) {
+        await existing.update({ status });
+      } else {
+        await Attendance.create({
+          userId,
+          sessionId,
+          classId,
+          lecture,
+          date,
+          status,
+        });
+      }
+    }
+
+    ok(res, null, 'Attendance updated successfully.');
+  } catch (error) {
+    console.error('bulkUpdateSessionAttendance error:', error);
+    fail(res, 'Internal server error.', 500);
+  }
+};
 
 module.exports = {
   markAttendance,
@@ -410,4 +467,5 @@ module.exports = {
   getStudentSummary,
   updateAttendance,
   deleteAttendance,
+  bulkUpdateSessionAttendance,
 };

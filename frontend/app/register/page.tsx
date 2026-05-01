@@ -43,7 +43,8 @@ export default function RegisterPage() {
       localStorage.setItem("user", JSON.stringify(user));
 
       toast.success("Account created successfully!");
-      window.location.href = "/teacher/dashboard";
+      const dashboard = user.role === "student" ? "/student/dashboard" : "/teacher/dashboard";
+      window.location.href = dashboard;
     } catch (err: unknown) {
       let message = "Something went wrong. Please try again.";
       if (axios.isAxiosError(err) && err.response?.data?.message) {

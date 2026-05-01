@@ -1,18 +1,21 @@
 const { Sequelize } = require('sequelize');
 require('dotenv').config();
 
-const {
-  DB_NAME = '',
-  DB_USER = '',
-  DB_PASSWORD = '',
-  DB_HOST = 'localhost',
-  DB_PORT = '5432',
-} = process.env;
+const DATABASE_URL = process.env.DATABASE_URL;
 
-const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
-  host: DB_HOST,
-  port: parseInt(DB_PORT, 10),
+if (!DATABASE_URL) {
+  console.error('DATABASE_URL is not set in environment variables.');
+  process.exit(1);
+}
+
+const sequelize = new Sequelize(DATABASE_URL, {
   dialect: 'postgres',
+  dialectOptions: {
+    ssl: {
+      require: true,
+      rejectUnauthorized: false,
+    },
+  },
   logging: false,
   pool: {
     max: 5,
@@ -25,7 +28,7 @@ const sequelize = new Sequelize(DB_NAME, DB_USER, DB_PASSWORD, {
 const testConnection = async () => {
   try {
     await sequelize.authenticate();
-    console.log('Database connection established successfully.');
+    console.log('Database connection established successfully (Neon DB).');
   } catch (error) {
     console.error('Unable to connect to the database:', error.message);
   }

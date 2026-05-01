@@ -1,7 +1,7 @@
 const { Router } = require('express');
 const { requireAuth } = require('../middleware/auth.middleware');
 const { requireRole } = require('../middleware/role.middleware');
-const { createClass, getClasses, getClassById, joinClass } = require('../controllers/class.controller');
+const { createClass, getClasses, getClassById, joinClass, getAtRiskStudents } = require('../controllers/class.controller');
 
 const router = Router();
 
@@ -15,5 +15,6 @@ router.post('/join', requireRole('student'), joinClass);
 router.get('/', requireRole('teacher', 'admin'), getClasses);
 router.get('/:id', requireRole('teacher', 'admin'), getClassById);
 router.post('/', requireRole('teacher', 'admin'), createClass);
+router.get('/:classId/at-risk', requireRole('teacher', 'admin'), getAtRiskStudents);
 
 module.exports = router;

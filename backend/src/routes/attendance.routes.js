@@ -10,6 +10,7 @@ const {
   getStudentSummary,
   updateAttendance,
   deleteAttendance,
+  bulkUpdateSessionAttendance,
 } = require('../controllers/attendance.controller');
 
 const router = Router();
@@ -25,6 +26,7 @@ router.delete('/:id', requireRole('admin'), deleteAttendance);
 
 // Teacher/admin — view attendance for a specific session (after QR expires)
 router.get('/session/:sessionId', requireRole('teacher', 'admin'), getSessionAttendance);
+router.put('/session/:sessionId', requireRole('teacher', 'admin'), bulkUpdateSessionAttendance);
 
 // Student — own attendance for a specific class
 router.get('/class/:classId/me', getClassAttendance);

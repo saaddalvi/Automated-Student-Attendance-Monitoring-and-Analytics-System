@@ -72,7 +72,7 @@ async function run() {
 
   // ─── 1. Register users ──────────────────────────────────────────────
   console.log('\n1. Register teacher + 2 students');
-  
+
   let r = await req('POST', '/api/auth/register', { name: 'Test Teacher', email: teacherEmail, password: 'pass123', role: 'teacher' });
   assert(r.status === 201, `Teacher registered (${r.status})`);
   teacherToken = r.body.data.token;
@@ -111,8 +111,8 @@ async function run() {
   assert(r.status === 201, `Session created (${r.status})`);
   sessionId = r.body.data.session.id;
   qrToken = r.body.data.token;
-  assert(!!sessionId, `Got sessionId: ${sessionId.slice(0,8)}`);
-  assert(!!qrToken, `Got token: ${qrToken.slice(0,8)}`);
+  assert(!!sessionId, `Got sessionId: ${sessionId.slice(0, 8)}`);
+  assert(!!qrToken, `Got token: ${qrToken.slice(0, 8)}`);
   assert(r.body.data.session.classId === classId, `Session has correct classId`);
 
   // ─── 5. Student 1 marks attendance via QR ───────────────────────────

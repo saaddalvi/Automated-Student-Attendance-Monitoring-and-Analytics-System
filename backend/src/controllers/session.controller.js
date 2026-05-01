@@ -150,4 +150,51 @@ const endSession = async (req, res) => {
   }
 };
 
-module.exports = { createSession, rotateToken, endSession };
+// ─── GET /api/session/class/:classId — Session history for a class ────────────
+// Returns all sessions for a class with present/absent counts (teacher view)
+
+const getSessionsByClass = async (req, res) => {
+  try {
+    const { classId } = req.params;
+
+    // Verify class exists
+    const cls = await db.Class.findByPk(classId);
+    if (!cls) {
+      return fail(res, 'Class not found.', 404);
+    }
+
+    // Count total enrolled students for this class
+    const totalEnrolled = await db.StudentClass.count({ where: { classId } });
+
+    // Fetch all sessions with their attendance records
+    const sessions = await Session.findAll({
+      where: { classId },
+      include: [{
+        model: db.Attendance,
+        as: 'attendances',
+        attributes: ['id', 'status'],
+      }],
+      order: [['createdAt', 'DESC']],
+    });
+
+    // Build response with present/absent counts per session
+    const result = sessions.map((session) => {
+      const presentCount = session.attendances.filter((a) => a.status === 'present').length;
+      return {
+        sessionId: session.id,
+        lecture: session.lecture,
+        date: session.createdAt.toISOString().split('T')[0],
+        totalStudents: totalEnrolled,
+        present: presentCount,
+        absent: totalEnrolled - presentCount,
+      };
+    });
+
+    ok(res, result, 'Session history fetched successfully.');
+  } catch (error) {
+    console.error('getSessionsByClass error:', error);
+    fail(res, 'Internal server error.', 500);
+  }
+};
+
+module.exports = { createSession, rotateToken, endSession, getSessionsByClass };

@@ -36,7 +36,7 @@ export default function LoginPage() {
       if (user.role === "teacher" || user.role === "admin") {
         window.location.href = "/teacher/dashboard";
       } else {
-        window.location.href = "/teacher/dashboard";
+        window.location.href = "/student/dashboard";
       }
     } catch (err: unknown) {
       let message = "Something went wrong. Please try again.";

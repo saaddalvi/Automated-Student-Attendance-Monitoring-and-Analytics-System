@@ -5,6 +5,7 @@ const {
   createSession,
   rotateToken,
   endSession,
+  getSessionsByClass,
 } = require('../controllers/session.controller');
 
 const router = Router();
@@ -16,5 +17,6 @@ router.use(requireRole('teacher', 'admin'));
 router.post('/', createSession);
 router.post('/:id/token', rotateToken);
 router.put('/:id/end', endSession);
+router.get('/class/:classId', getSessionsByClass);
 
 module.exports = router;

@@ -17,15 +17,39 @@ import {
   Copy,
   Check,
   BookOpen,
+  History,
+  ShieldAlert,
+  Inbox,
 } from "lucide-react";
 import AuthGuard from "../../../components/AuthGuard";
 import Skeleton from "../../../components/Skeleton";
+import SessionAttendanceModal from "../../../components/attendance/SessionAttendanceModal";
 import api from "../../../lib/api";
 import toast from "react-hot-toast";
 
 // ─── Static Options ───────────────────────────────────────────────────────────
 
-const lectures = ["Lecture 1", "Lecture 2", "Lecture 3", "Lecture 4", "Lecture 5"];
+const startTimeOptions = [
+  { label: "8:45 AM", value: "8:45 AM" },
+  { label: "9:45 AM", value: "9:45 AM" },
+  { label: "11:00 AM", value: "11:00 AM" },
+  { label: "12:00 PM", value: "12:00 PM" },
+  { label: "1:30 PM", value: "1:30 PM" },
+  { label: "2:30 PM", value: "2:30 PM" },
+  { label: "3:30 PM", value: "3:30 PM" },
+  { label: "4:30 PM", value: "4:30 PM" },
+];
+
+const endTimeOptions = [
+  { label: "9:45 AM", value: "9:45 AM" },
+  { label: "10:45 AM", value: "10:45 AM" },
+  { label: "12:00 PM", value: "12:00 PM" },
+  { label: "1:00 PM", value: "1:00 PM" },
+  { label: "2:30 PM", value: "2:30 PM" },
+  { label: "3:30 PM", value: "3:30 PM" },
+  { label: "4:30 PM", value: "4:30 PM" },
+  { label: "5:30 PM", value: "5:30 PM" },
+];
 
 const durationOptions = [
   { label: "30 sec", value: 30 },
@@ -70,6 +94,21 @@ interface ClassData {
   teacherId: string;
 }
 
+interface SessionHistory {
+  sessionId: string;
+  lecture: string;
+  date: string;
+  totalStudents: number;
+  present: number;
+  absent: number;
+}
+
+interface AtRiskStudent {
+  id: string;
+  name: string;
+  percentage: number;
+}
+
 // ─── Page Component ───────────────────────────────────────────────────────────
 
 export default function ClassDetailPage() {
@@ -83,7 +122,8 @@ export default function ClassDetailPage() {
   const [copiedCode, setCopiedCode] = useState(false);
 
   // Form state
-  const [selectedLecture, setSelectedLecture] = useState("");
+  const [selectedStartTime, setSelectedStartTime] = useState("");
+  const [selectedEndTime, setSelectedEndTime] = useState("");
   const [duration, setDuration] = useState(60);
 
   // QR session state
@@ -99,23 +139,61 @@ export default function ClassDetailPage() {
   const [attendanceResults, setAttendanceResults] = useState<AttendanceResults | null>(null);
   const [loadingResults, setLoadingResults] = useState(false);
 
+  // Analytics state
+  const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
+  const [atRiskStudents, setAtRiskStudents] = useState<AtRiskStudent[]>([]);
+  const [loadingHistory, setLoadingHistory] = useState(true);
+  const [loadingAtRisk, setLoadingAtRisk] = useState(true);
+  const [selectedSession, setSelectedSession] = useState<SessionHistory | null>(null);
+
   const countdownRef = useRef<NodeJS.Timeout | null>(null);
   const rotationRef = useRef<NodeJS.Timeout | null>(null);
 
   // ─── Fetch class data ─────────────────────────────────────────────────────
 
   useEffect(() => {
-    const fetchClass = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await api.get(`/api/classes/${classId}`);
-        setClassData(res.data.data.class);
+        const [classRes, historyRes, riskRes] = await Promise.allSettled([
+          api.get(`/api/classes/${classId}`),
+          api.get(`/api/session/class/${classId}`),
+          api.get(`/api/classes/${classId}/at-risk`),
+        ]);
+
+        if (classRes.status === "fulfilled") {
+          setClassData(classRes.value.data.data.class);
+        } else {
+          toast.error("Failed to load class details");
+        }
+
+        if (historyRes.status === "fulfilled") {
+          setSessionHistory(historyRes.value.data.data);
+        }
+
+        if (riskRes.status === "fulfilled") {
+          setAtRiskStudents(riskRes.value.data.data);
+        }
       } catch {
-        toast.error("Failed to load class details");
+        toast.error("Failed to load class data");
       } finally {
         setLoadingClass(false);
+        setLoadingHistory(false);
+        setLoadingAtRisk(false);
       }
     };
-    fetchClass();
+    fetchAll();
+  }, [classId]);
+  // ─── Refresh analytics data (called after modal save) ─────────────────────
+
+  const refreshAnalytics = useCallback(async () => {
+    try {
+      const [historyRes, riskRes] = await Promise.allSettled([
+        api.get(`/api/session/class/${classId}`),
+        api.get(`/api/classes/${classId}/at-risk`),
+      ]);
+      if (historyRes.status === "fulfilled") setSessionHistory(historyRes.value.data.data);
+      if (riskRes.status === "fulfilled") setAtRiskStudents(riskRes.value.data.data);
+    } catch { /* best effort */ }
   }, [classId]);
 
   // ─── Build QR URL ─────────────────────────────────────────────────────────
@@ -170,7 +248,7 @@ export default function ClassDetailPage() {
       setIsActive(false);
       setSessionExpired(true);
       setShowResults(true);
-      toast.error("Session expired");
+      setTimeout(() => toast.error("Session expired"), 0);
 
       try {
         await api.put(`/api/session/${sid}/end`);
@@ -235,9 +313,14 @@ export default function ClassDetailPage() {
 
   // ─── Generate QR ──────────────────────────────────────────────────────────
 
+  // Derive lecture label from selected times
+  const selectedLecture = selectedStartTime && selectedEndTime
+    ? `${selectedStartTime} – ${selectedEndTime}`
+    : "";
+
   const generateQR = async () => {
-    if (!selectedLecture) {
-      toast.error("Please select a lecture first");
+    if (!selectedStartTime || !selectedEndTime) {
+      toast.error("Please select both start and end times");
       return;
     }
     if (isActive) return;
@@ -435,36 +518,74 @@ export default function ClassDetailPage() {
               <div className="bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
                 <h2 className="text-lg font-bold text-[#1E293B] mb-6">Take Attendance</h2>
 
-                {/* Lecture selector */}
-                <label htmlFor="lecture" className="block text-sm font-medium text-[#1E293B] mb-2">
-                  Select Lecture
+                {/* Lecture time selectors */}
+                <label className="block text-sm font-medium text-[#1E293B] mb-2">
+                  Choose Time
                 </label>
-                <div className="relative mb-6">
-                  <select
-                    id="lecture"
-                    value={selectedLecture}
-                    onChange={(e) => {
-                      setSelectedLecture(e.target.value);
-                      if (!isActive) {
-                        setQrValue("");
-                        setShowResults(false);
-                        setSessionExpired(false);
-                      }
-                    }}
-                    disabled={isActive}
-                    className="w-full appearance-none border border-gray-200 rounded-lg px-3.5 py-2.5 pr-10 text-sm text-[#1E293B] bg-white outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition-all duration-150 disabled:bg-gray-50 disabled:text-[#94A3B8]"
-                  >
-                    <option value="">Choose a lecture…</option>
-                    {lectures.map((l) => (
-                      <option key={l} value={l}>
-                        {l}
-                      </option>
-                    ))}
-                  </select>
-                  <ChevronDown
-                    size={16}
-                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
-                  />
+                <div className="grid grid-cols-2 gap-3 mb-6">
+                  {/* Start Time */}
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1.5">Start Time</p>
+                    <div className="relative">
+                      <select
+                        id="startTime"
+                        value={selectedStartTime}
+                        onChange={(e) => {
+                          setSelectedStartTime(e.target.value);
+                          if (!isActive) {
+                            setQrValue("");
+                            setShowResults(false);
+                            setSessionExpired(false);
+                          }
+                        }}
+                        disabled={isActive}
+                        className="w-full appearance-none border border-gray-200 rounded-lg px-3.5 py-2.5 pr-10 text-sm text-[#1E293B] bg-white outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition-all duration-150 disabled:bg-gray-50 disabled:text-[#94A3B8]"
+                      >
+                        <option value="">Start time…</option>
+                        {startTimeOptions.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* End Time */}
+                  <div>
+                    <p className="text-xs text-[#64748B] mb-1.5">End Time</p>
+                    <div className="relative">
+                      <select
+                        id="endTime"
+                        value={selectedEndTime}
+                        onChange={(e) => {
+                          setSelectedEndTime(e.target.value);
+                          if (!isActive) {
+                            setQrValue("");
+                            setShowResults(false);
+                            setSessionExpired(false);
+                          }
+                        }}
+                        disabled={isActive}
+                        className="w-full appearance-none border border-gray-200 rounded-lg px-3.5 py-2.5 pr-10 text-sm text-[#1E293B] bg-white outline-none focus:ring-2 focus:ring-[#4F46E5] focus:border-transparent transition-all duration-150 disabled:bg-gray-50 disabled:text-[#94A3B8]"
+                      >
+                        <option value="">End time…</option>
+                        {endTimeOptions.map((t) => (
+                          <option key={t.value} value={t.value}>
+                            {t.label}
+                          </option>
+                        ))}
+                      </select>
+                      <ChevronDown
+                        size={16}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[#94A3B8] pointer-events-none"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {/* Duration selector */}
@@ -491,7 +612,7 @@ export default function ClassDetailPage() {
                 {/* Generate button */}
                 <button
                   onClick={generateQR}
-                  disabled={!selectedLecture || isActive || generating}
+                  disabled={!selectedStartTime || !selectedEndTime || isActive || generating}
                   className="w-full flex items-center justify-center gap-2 bg-[#4F46E5] hover:bg-[#4338CA] hover:scale-[1.02] hover:shadow-xl disabled:bg-[#4F46E5]/40 disabled:cursor-not-allowed disabled:hover:scale-100 text-white font-medium text-sm px-5 py-3 rounded-xl transition-all duration-150 shadow-lg shadow-[#4F46E5]/25 cursor-pointer"
                 >
                   {generating ? (
@@ -717,7 +838,150 @@ export default function ClassDetailPage() {
               </div>
             </div>
           </div>
+
+          {/* ─── Attendance History Section ──────────────────────────────── */}
+          <div className="mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
+            <div className="flex items-center gap-2 mb-6">
+              <History size={18} className="text-[#4F46E5]" />
+              <h2 className="text-lg font-bold text-[#1E293B]">Attendance History</h2>
+            </div>
+
+            {loadingHistory ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <div key={i} className="flex gap-4">
+                    <Skeleton className="flex-1 h-10" />
+                    <Skeleton className="w-16 h-10" />
+                    <Skeleton className="w-16 h-10" />
+                  </div>
+                ))}
+              </div>
+            ) : sessionHistory.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="flex justify-center mb-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#4F46E5]/5 flex items-center justify-center">
+                    <Inbox size={24} className="text-[#4F46E5]/40" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-[#1E293B] mb-1">No sessions yet</h3>
+                <p className="text-xs text-[#94A3B8]">Generate a QR code to start tracking attendance.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-gray-100">
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Lecture</th>
+                      <th className="text-left py-3 px-3 text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Date</th>
+                      <th className="text-center py-3 px-3 text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Present</th>
+                      <th className="text-center py-3 px-3 text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Absent</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {sessionHistory.map((s) => (
+                      <tr
+                        key={s.sessionId}
+                        onClick={() => setSelectedSession(s)}
+                        className="border-b border-gray-50 hover:bg-[#4F46E5]/5 transition-colors cursor-pointer"
+                      >
+                        <td className="py-3 px-3 font-medium text-[#1E293B]">{s.lecture}</td>
+                        <td className="py-3 px-3 text-[#64748B]">
+                          {new Date(s.date).toLocaleDateString("en-IN", {
+                            day: "numeric",
+                            month: "short",
+                            year: "numeric",
+                          })}
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#10B981] bg-[#10B981]/10 px-2.5 py-1 rounded-full">
+                            <CheckCircle2 size={12} />
+                            {s.present}
+                          </span>
+                        </td>
+                        <td className="py-3 px-3 text-center">
+                          <span className="inline-flex items-center gap-1 text-xs font-semibold text-[#F43F5E] bg-[#F43F5E]/10 px-2.5 py-1 rounded-full">
+                            <XCircle size={12} />
+                            {s.absent}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </div>
+
+          {/* ─── At-Risk Students Section ────────────────────────────────── */}
+          <div className="mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
+            <div className="flex items-center gap-2 mb-6">
+              <ShieldAlert size={18} className="text-[#F59E0B]" />
+              <h2 className="text-lg font-bold text-[#1E293B]">At-Risk Students</h2>
+              <span className="text-xs text-[#94A3B8] ml-1">(below 75%)</span>
+            </div>
+
+            {loadingAtRisk ? (
+              <div className="space-y-3">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-14 rounded-xl" />
+                ))}
+              </div>
+            ) : atRiskStudents.length === 0 ? (
+              <div className="text-center py-10">
+                <div className="flex justify-center mb-3">
+                  <div className="w-14 h-14 rounded-2xl bg-[#10B981]/10 flex items-center justify-center">
+                    <CheckCircle2 size={24} className="text-[#10B981]" />
+                  </div>
+                </div>
+                <h3 className="text-sm font-semibold text-[#1E293B] mb-1">All students on track!</h3>
+                <p className="text-xs text-[#94A3B8]">No students are below the 75% attendance threshold.</p>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {atRiskStudents.map((student) => {
+                  const isRed = student.percentage < 50;
+                  const colorClasses = isRed
+                    ? "border-[#F43F5E]/20 bg-[#F43F5E]/5"
+                    : "border-[#F59E0B]/20 bg-[#F59E0B]/5";
+                  const badgeClasses = isRed
+                    ? "text-[#F43F5E] bg-[#F43F5E]/10"
+                    : "text-[#F59E0B] bg-[#F59E0B]/10";
+
+                  return (
+                    <div
+                      key={student.id}
+                      className={`flex items-center justify-between rounded-xl border p-4 transition-all ${colorClasses}`}
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className={`w-9 h-9 rounded-lg flex items-center justify-center text-xs font-bold ${
+                          isRed ? "bg-[#F43F5E]/10 text-[#F43F5E]" : "bg-[#F59E0B]/10 text-[#F59E0B]"
+                        }`}>
+                          {student.name.charAt(0).toUpperCase()}
+                        </div>
+                        <span className="text-sm font-medium text-[#1E293B]">{student.name}</span>
+                      </div>
+                      <span className={`text-xs font-bold px-3 py-1 rounded-full ${badgeClasses}`}>
+                        {student.percentage}%
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
         </main>
+
+        {/* ─── Session Attendance Modal ─────────────────────────────── */}
+        {selectedSession && (
+          <SessionAttendanceModal
+            sessionId={selectedSession.sessionId}
+            lecture={selectedSession.lecture}
+            date={selectedSession.date}
+            onClose={() => setSelectedSession(null)}
+            onSaved={refreshAnalytics}
+          />
+        )}
       </div>
     </AuthGuard>
   );

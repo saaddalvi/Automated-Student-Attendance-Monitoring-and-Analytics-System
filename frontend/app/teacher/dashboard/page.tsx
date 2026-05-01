@@ -166,9 +166,12 @@ export default function TeacherDashboard() {
           {!loading && classes.length > 0 && (
             <div className="grid md:grid-cols-3 gap-6">
               {classes.map((cls) => (
-                <button
+                <div
                   key={cls.id}
                   onClick={() => router.push(`/teacher/class/${cls.id}`)}
+                  role="button"
+                  tabIndex={0}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') router.push(`/teacher/class/${cls.id}`); }}
                   className="group bg-white rounded-xl shadow-md hover:shadow-xl hover:-translate-y-1 transition-all duration-150 p-5 border border-gray-50 text-left cursor-pointer"
                 >
                   {/* Icon */}
@@ -212,7 +215,7 @@ export default function TeacherDashboard() {
                   <div className="mt-4 flex items-center gap-1 text-xs font-medium text-[#4F46E5] opacity-0 group-hover:opacity-100 transition-opacity duration-150">
                     Manage class <ChevronRight size={14} />
                   </div>
-                </button>
+                </div>
               ))}
             </div>
           )}

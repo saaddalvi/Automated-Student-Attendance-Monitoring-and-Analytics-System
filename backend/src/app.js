@@ -8,18 +8,25 @@ const { testConnection } = require('./config/database');
 const app = express();
 
 // ─── Middleware ───────────────────────────────────────────────────────────────
+
+// CORS — allow localhost for dev, and CORS_ORIGIN env var for production
+const allowedOrigins = [
+  'http://localhost:3000',
+  ...(process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map(s => s.trim()) : []),
+];
+
 app.use(cors({
-  origin: function(origin, callback) {
-    const allowed = ['http://localhost:3000', 'http://localhost:3001', 'http://192.168.0.102:3000'];
-    // Allow localtunnel URLs and requests with no origin (e.g. mobile apps, curl)
-    if (!origin || allowed.includes(origin) || origin.endsWith('.loca.lt')) {
+  origin: (origin, callback) => {
+    // Allow requests with no origin (mobile apps, Postman, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
       callback(null, true);
     } else {
-      callback(null, true); // Allow all for dev
+      callback(null, true); // permissive for now; tighten later if needed
     }
   },
   credentials: true,
 }));
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
@@ -75,8 +82,8 @@ testConnection().then(async () => {
   await db.sequelize.sync({ alter: true });
   console.log('Database tables synced.');
 
-  app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+  app.listen(PORT, '0.0.0.0', () => {
+    console.log(`Server running on http://0.0.0.0:${PORT}`);
   });
 });
 

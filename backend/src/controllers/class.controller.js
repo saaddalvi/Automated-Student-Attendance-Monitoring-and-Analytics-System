@@ -178,5 +178,85 @@ const getStudentClasses = async (req, res) => {
   }
 };
 
-module.exports = { createClass, getClasses, getClassById, joinClass, getStudentClasses };
+// ─── GET /api/classes/:classId/at-risk — Students with <75% attendance ───────
+// Efficient: uses grouped count query to avoid N+1
 
+const getAtRiskStudents = async (req, res) => {
+  try {
+    const { classId } = req.params;
+
+    // Verify class exists
+    const cls = await Class.findByPk(classId);
+    if (!cls) {
+      return fail(res, 'Class not found.', 404);
+    }
+
+    // Total sessions (lectures) for this class
+    const totalSessions = await db.Session.count({ where: { classId } });
+
+    if (totalSessions === 0) {
+      return ok(res, [], 'No sessions found for this class.');
+    }
+
+    // Get all enrolled students
+    const enrolledStudents = await db.User.findAll({
+      include: [{
+        model: StudentClass,
+        as: 'enrollments',
+        where: { classId },
+        attributes: [],
+      }],
+      attributes: ['id', 'name'],
+    });
+
+    if (enrolledStudents.length === 0) {
+      return ok(res, [], 'No students enrolled in this class.');
+    }
+
+    // Batch query: count PRESENT attendance records per student for this class
+    // Only count status='present' — absent records should not inflate the percentage
+    const attendanceCounts = await db.Attendance.findAll({
+      where: { classId, status: 'present' },
+      attributes: [
+        'userId',
+        [db.sequelize.fn('COUNT', db.sequelize.col('Attendance.id')), 'count'],
+      ],
+      group: ['Attendance.user_id'],
+      raw: true,
+    });
+
+    // Build a lookup: userId -> present count
+    // raw:true + underscored:true means keys come back as snake_case
+    const countMap = {};
+    for (const row of attendanceCounts) {
+      const uid = row.userId || row.user_id;
+      countMap[uid] = parseInt(row.count, 10);
+    }
+
+    // Filter students with < 75% attendance
+    const atRisk = enrolledStudents
+      .map((student) => {
+        const attended = countMap[student.id] || 0;
+
+        const percentage =
+          totalSessions > 0
+            ? Math.floor((attended / totalSessions) * 100)
+            : 0;
+
+        return {
+          id: student.id,
+          name: student.name,
+          percentage
+        };
+      })
+      .filter((s) => s.percentage < 75)
+      .sort((a, b) => a.percentage - b.percentage);
+
+    ok(res, atRisk, 'At-risk students fetched successfully.');
+  } catch (error) {
+    console.error('getAtRiskStudents error:', error);
+    fail(res, 'Internal server error.', 500);
+  }
+};
+
+module.exports = { createClass, getClasses, getClassById, joinClass, getStudentClasses, getAtRiskStudents };
