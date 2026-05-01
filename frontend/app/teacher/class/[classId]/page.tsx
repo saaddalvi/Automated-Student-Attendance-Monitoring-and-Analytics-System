@@ -20,12 +20,15 @@ import {
   History,
   ShieldAlert,
   Inbox,
+  Download,
 } from "lucide-react";
 import AuthGuard from "../../../components/AuthGuard";
 import Skeleton from "../../../components/Skeleton";
 import SessionAttendanceModal from "../../../components/attendance/SessionAttendanceModal";
 import api from "../../../lib/api";
 import toast from "react-hot-toast";
+import jsPDF from "jspdf";
+import autoTable from "jspdf-autotable";
 
 // ─── Static Options ───────────────────────────────────────────────────────────
 
@@ -915,10 +918,97 @@ export default function ClassDetailPage() {
 
           {/* ─── At-Risk Students Section ────────────────────────────────── */}
           <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-4 sm:p-6 md:p-8">
-            <div className="flex items-center gap-2 mb-6">
-              <ShieldAlert size={18} className="text-[#F59E0B]" />
-              <h2 className="text-lg font-bold text-[#1E293B]">At-Risk Students</h2>
-              <span className="text-xs text-[#94A3B8] ml-1">(below 75%)</span>
+            <div className="flex items-center justify-between mb-6">
+              <div className="flex items-center gap-2">
+                <ShieldAlert size={18} className="text-[#F59E0B]" />
+                <h2 className="text-lg font-bold text-[#1E293B]">At-Risk Students</h2>
+                <span className="text-xs text-[#94A3B8] ml-1">(below 75%)</span>
+              </div>
+              {atRiskStudents.length > 0 && (
+                <button
+                  onClick={() => {
+                    const doc = new jsPDF();
+                    const now = new Date();
+                    const dateStr = now.toLocaleDateString("en-IN", {
+                      day: "numeric",
+                      month: "long",
+                      year: "numeric",
+                    });
+                    const timeStr = now.toLocaleTimeString("en-IN", {
+                      hour: "2-digit",
+                      minute: "2-digit",
+                    });
+
+                    // Title
+                    doc.setFontSize(18);
+                    doc.setFont("helvetica", "bold");
+                    doc.text(`Defaulters for ${classData?.className || "Class"}`, 14, 22);
+
+                    // Subtitle with date
+                    doc.setFontSize(10);
+                    doc.setFont("helvetica", "normal");
+                    doc.setTextColor(100, 116, 139);
+                    doc.text(`Generated on ${dateStr} at ${timeStr}`, 14, 30);
+                    doc.text(
+                      `Department: ${classData?.department || "-"}  |  Year: ${classData?.year || "-"}  |  Division: ${classData?.division || "-"}`,
+                      14,
+                      36
+                    );
+
+                    // Divider
+                    doc.setDrawColor(226, 232, 240);
+                    doc.line(14, 40, 196, 40);
+
+                    // Table
+                    doc.setTextColor(0, 0, 0);
+                    autoTable(doc, {
+                      startY: 46,
+                      head: [["Sr.No", "Student Name", "Attendance %"]],
+                      body: atRiskStudents.map((s, i) => [
+                        i + 1,
+                        s.name,
+                        `${s.percentage}%`,
+                      ]),
+                      theme: "grid",
+                      headStyles: {
+                        fillColor: [79, 70, 229],
+                        textColor: 255,
+                        fontStyle: "bold",
+                        fontSize: 10,
+                      },
+                      bodyStyles: { fontSize: 10 },
+                      alternateRowStyles: { fillColor: [248, 250, 252] },
+                      columnStyles: {
+                        0: { halign: "center", cellWidth: 20 },
+                        2: { halign: "center", cellWidth: 35 },
+                      },
+                      margin: { left: 14, right: 14 },
+                    });
+
+                    // Footer
+                    const pageCount = doc.getNumberOfPages();
+                    for (let i = 1; i <= pageCount; i++) {
+                      doc.setPage(i);
+                      doc.setFontSize(8);
+                      doc.setTextColor(148, 163, 184);
+                      doc.text(
+                        `AttendEase — Defaulter Report | Page ${i} of ${pageCount}`,
+                        14,
+                        doc.internal.pageSize.height - 10
+                      );
+                    }
+
+                    doc.save(
+                      `Defaulters_${classData?.className || "Class"}_${now.toISOString().split("T")[0]}.pdf`
+                    );
+                    toast.success("PDF downloaded!");
+                  }}
+                  className="inline-flex items-center gap-1.5 text-xs font-medium text-[#4F46E5] hover:text-[#4338CA] bg-[#4F46E5]/10 hover:bg-[#4F46E5]/20 px-3 py-2 rounded-lg transition-all duration-150 cursor-pointer"
+                >
+                  <Download size={14} />
+                  Download PDF
+                </button>
+              )}
             </div>
 
             {loadingAtRisk ? (
