@@ -215,7 +215,9 @@ const getAtRiskStudents = async (req, res) => {
 
     // Batch query: count PRESENT attendance records per student for this class
     // Only count status='present' — absent records should not inflate the percentage
-    const attendanceCounts = await db.Attendance.findAll({
+    // Use .unscoped() to strip the default ORDER BY (date, createdAt) which
+    // conflicts with GROUP BY in PostgreSQL (all ORDER columns must be aggregated or grouped).
+    const attendanceCounts = await db.Attendance.unscoped().findAll({
       where: { classId, status: 'present' },
       attributes: [
         'userId',
