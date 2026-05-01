@@ -137,9 +137,9 @@ export default function SessionAttendanceModal({
       />
 
       {/* Modal */}
-      <div className="relative w-full max-w-lg mx-4 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
+      <div className="relative w-full max-w-lg mx-3 sm:mx-4 bg-white rounded-2xl shadow-2xl border border-gray-100 max-h-[90vh] sm:max-h-[85vh] flex flex-col animate-in fade-in zoom-in-95 duration-200">
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+        <div className="flex items-center justify-between px-4 sm:px-6 py-4 sm:py-5 border-b border-gray-100">
           <div>
             <h2 className="text-lg font-bold text-[#1E293B]">{lecture}</h2>
             <p className="text-xs text-[#64748B] mt-0.5">
@@ -160,7 +160,7 @@ export default function SessionAttendanceModal({
 
         {/* Stats bar */}
         {!loading && (
-          <div className="flex gap-3 px-6 py-3 border-b border-gray-50 bg-[#F8FAFC]">
+          <div className="flex gap-3 px-4 sm:px-6 py-3 border-b border-gray-50 bg-[#F8FAFC]">
             <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-[#10B981] bg-[#10B981]/10 px-3 py-1.5 rounded-full">
               <CheckCircle2 size={12} />
               {presentCount} Present
@@ -176,7 +176,7 @@ export default function SessionAttendanceModal({
         )}
 
         {/* Student list */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-2">
+        <div className="flex-1 overflow-y-auto px-4 sm:px-6 py-4 space-y-2">
           {loading ? (
             <div className="flex flex-col items-center justify-center py-12">
               <Loader2 size={24} className="text-[#4F46E5] animate-spin mb-3" />
@@ -234,7 +234,7 @@ export default function SessionAttendanceModal({
 
         {/* Footer with save */}
         {!loading && students.length > 0 && (
-          <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between">
+          <div className="px-4 sm:px-6 py-4 border-t border-gray-100 flex items-center justify-between gap-3">
             <p className="text-xs text-[#94A3B8]">
               {hasChanges ? "You have unsaved changes" : "Click a student to toggle status"}
             </p>

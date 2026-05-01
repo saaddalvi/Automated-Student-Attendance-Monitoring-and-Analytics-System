@@ -39,7 +39,7 @@ export default function JoinClassPage() {
       <div className="min-h-screen bg-[#F8FAFC]">
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center gap-3">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center gap-3">
             <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center">
               <span className="text-white font-bold text-sm">A</span>
             </div>
@@ -47,7 +47,7 @@ export default function JoinClassPage() {
           </div>
         </header>
 
-        <main className="flex items-center justify-center px-6" style={{ minHeight: "calc(100vh - 65px)" }}>
+        <main className="flex items-center justify-center px-4 sm:px-6" style={{ minHeight: "calc(100vh - 65px)" }}>
           <div className="w-full max-w-md">
             {/* Back link */}
             <button

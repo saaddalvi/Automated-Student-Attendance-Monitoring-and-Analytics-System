@@ -82,7 +82,7 @@ export default function TeacherDashboard() {
       <div className="min-h-screen bg-[#F8FAFC]">
         {/* Top bar */}
         <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center">
                 <span className="text-white font-bold text-sm">A</span>
@@ -100,7 +100,7 @@ export default function TeacherDashboard() {
               </div>
               <button
                 onClick={handleLogout}
-                className="text-[#64748B] hover:text-[#F43F5E] transition-colors duration-150"
+                className="p-2 text-[#64748B] hover:text-[#F43F5E] transition-colors duration-150"
                 title="Logout"
               >
                 <LogOut size={18} />
@@ -109,7 +109,7 @@ export default function TeacherDashboard() {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-6 py-10">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
           {/* Header row with title + Create button */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-3">
@@ -164,7 +164,7 @@ export default function TeacherDashboard() {
 
           {/* Class cards */}
           {!loading && classes.length > 0 && (
-            <div className="grid md:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
               {classes.map((cls) => (
                 <div
                   key={cls.id}

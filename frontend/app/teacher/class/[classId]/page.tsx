@@ -437,7 +437,7 @@ export default function ClassDetailPage() {
       <div className="min-h-screen bg-[#F8FAFC]">
         {/* Top bar */}
         <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center">
                 <span className="text-white font-bold text-sm">A</span>
@@ -453,7 +453,7 @@ export default function ClassDetailPage() {
           </div>
         </header>
 
-        <main className="max-w-5xl mx-auto px-6 py-10">
+        <main className="max-w-5xl mx-auto px-4 sm:px-6 py-6 sm:py-10">
           {/* Back */}
           <button
             onClick={() => router.push("/teacher/dashboard")}
@@ -463,7 +463,7 @@ export default function ClassDetailPage() {
             Back to Dashboard
           </button>
 
-          <div className="grid lg:grid-cols-5 gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-5 gap-6">
             {/* ─── Left: Class Info ──────────────────────────────────────── */}
             <div className="lg:col-span-2 space-y-6">
               <div className="bg-white rounded-2xl shadow-md border border-gray-50 p-6">
@@ -515,7 +515,7 @@ export default function ClassDetailPage() {
 
             {/* ─── Right: Attendance Section ─────────────────────────────── */}
             <div className="lg:col-span-3">
-              <div className="bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
+              <div className="bg-white rounded-2xl shadow-md border border-gray-50 p-5 sm:p-6 md:p-8">
                 <h2 className="text-lg font-bold text-[#1E293B] mb-6">Take Attendance</h2>
 
                 {/* Lecture time selectors */}
@@ -672,10 +672,11 @@ export default function ClassDetailPage() {
                       <QRCodeSVG
                         id="attendance-qr"
                         value={qrValue}
-                        size={220}
+                        size={180}
                         level="H"
                         includeMargin
                         fgColor="#1E293B"
+                        className="w-full h-auto max-w-[220px]"
                       />
                     </div>
 
@@ -840,7 +841,7 @@ export default function ClassDetailPage() {
           </div>
 
           {/* ─── Attendance History Section ──────────────────────────────── */}
-          <div className="mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
+          <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-4 sm:p-6 md:p-8">
             <div className="flex items-center gap-2 mb-6">
               <History size={18} className="text-[#4F46E5]" />
               <h2 className="text-lg font-bold text-[#1E293B]">Attendance History</h2>
@@ -867,8 +868,8 @@ export default function ClassDetailPage() {
                 <p className="text-xs text-[#94A3B8]">Generate a QR code to start tracking attendance.</p>
               </div>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
+              <div className="overflow-x-auto -mx-4 sm:mx-0">
+                <table className="w-full text-sm min-w-[480px]">
                   <thead>
                     <tr className="border-b border-gray-100">
                       <th className="text-left py-3 px-3 text-xs font-semibold text-[#94A3B8] uppercase tracking-wider">Lecture</th>
@@ -913,7 +914,7 @@ export default function ClassDetailPage() {
           </div>
 
           {/* ─── At-Risk Students Section ────────────────────────────────── */}
-          <div className="mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-6 md:p-8">
+          <div className="mt-6 sm:mt-8 bg-white rounded-2xl shadow-md border border-gray-50 p-4 sm:p-6 md:p-8">
             <div className="flex items-center gap-2 mb-6">
               <ShieldAlert size={18} className="text-[#F59E0B]" />
               <h2 className="text-lg font-bold text-[#1E293B]">At-Risk Students</h2>

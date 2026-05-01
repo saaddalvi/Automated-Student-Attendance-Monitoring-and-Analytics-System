@@ -111,7 +111,7 @@ export default function StudentDashboard() {
       <div className="min-h-screen bg-[#F8FAFC]">
         {/* Header */}
         <header className="sticky top-0 z-40 bg-white/80 backdrop-blur-md border-b border-gray-100">
-          <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 py-3 sm:py-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center">
                 <span className="text-white font-bold text-sm">A</span>
@@ -138,7 +138,7 @@ export default function StudentDashboard() {
           </div>
         </header>
 
-        <main className="max-w-7xl mx-auto px-6 py-8">
+        <main className="max-w-7xl mx-auto px-4 sm:px-6 py-6 sm:py-8">
           {/* Welcome */}
           <div className="mb-8">
             <div className="flex items-center gap-2 mb-1">
@@ -151,7 +151,7 @@ export default function StudentDashboard() {
           </div>
 
           {/* Stats + Actions Row */}
-          <div className="grid md:grid-cols-4 gap-4 mb-8">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-8">
             {/* Stat: Total Classes */}
             <div className="bg-white rounded-2xl shadow-md border border-gray-50 p-5 flex items-center gap-4">
               <div className="w-12 h-12 rounded-xl bg-[#4F46E5]/10 flex items-center justify-center flex-shrink-0">
@@ -374,7 +374,7 @@ export default function StudentDashboard() {
 
               {/* Class cards */}
               {!loading && classes.length > 0 && (
-                <div className="grid md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   {classes.map((cls) => {
                     const att = getAttendance(cls.id);
                     const attColor =
