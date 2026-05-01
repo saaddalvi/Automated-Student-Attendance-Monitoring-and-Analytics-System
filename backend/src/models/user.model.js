@@ -57,6 +57,13 @@ const initUserModel = (sequelize) => {
         allowNull: false,
         defaultValue: true,
       },
+
+      // Device binding — set on first attendance to prevent account sharing
+      deviceId: {
+        type: DataTypes.STRING,
+        allowNull: true,
+        defaultValue: null,
+      },
     },
     {
       sequelize,

@@ -18,7 +18,7 @@ const today = () => new Date().toISOString().split('T')[0];
 
 const markAttendance = async (req, res) => {
   try {
-    const { userId, date, status, sessionId, token } = req.body;
+    const { userId, date, status, sessionId, token, deviceId } = req.body;
 
     if (!userId || !status) {
       fail(res, 'Fields userId and status are required.');
@@ -69,6 +69,29 @@ const markAttendance = async (req, res) => {
         fail(res, 'Invalid or expired QR.');
         return;
       }
+
+      // ─── Device binding validation (QR-based attendance only) ───────────
+      if (!deviceId) {
+        fail(res, 'Device ID is required for attendance.');
+        return;
+      }
+
+      // Fetch user with all fields (bypass defaultScope that excludes password)
+      const studentUser = await User.findByPk(userId);
+      if (!studentUser) {
+        fail(res, 'User not found.', 404);
+        return;
+      }
+
+      if (!studentUser.deviceId) {
+        // First attendance — bind this device to the account
+        await studentUser.update({ deviceId });
+      } else if (studentUser.deviceId !== deviceId) {
+        // Different device — block attendance
+        fail(res, 'This account is already linked to another device. If you changed your device, contact your teacher or admin.', 403);
+        return;
+      }
+      // ─── End device binding validation ──────────────────────────────────
 
       // Extract classId and lecture from the session
       classId = session.classId;

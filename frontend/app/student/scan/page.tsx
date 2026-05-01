@@ -14,6 +14,7 @@ import {
 import AuthGuard from "../../components/AuthGuard";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
+import { getDeviceId } from "../../lib/deviceId";
 
 // Dynamic import — QR scanner uses browser APIs that break SSR
 const Scanner = dynamic(
@@ -96,6 +97,7 @@ export default function ScanPage() {
           status: "present",
           sessionId: parsed.sessionId,
           token: parsed.token,
+          deviceId: getDeviceId(),
         });
 
         setStatus("success");
@@ -106,13 +108,19 @@ export default function ScanPage() {
           router.push("/student/dashboard");
         }, 3000);
       } catch (error: unknown) {
-        const err = error as { response?: { data?: { message?: string } } };
+        const err = error as { response?: { status?: number; data?: { message?: string } } };
         const msg = err.response?.data?.message || "Failed to mark attendance";
+        const statusCode = err.response?.status;
         setStatus("error");
         setErrorMsg(msg);
         toast.error(msg);
 
-        // Allow retry after delay
+        // If device mismatch (403), do NOT allow retry — account is locked to another device
+        if (statusCode === 403) {
+          return;
+        }
+
+        // Allow retry after delay for other errors
         setTimeout(() => {
           processedRef.current = false;
           setPaused(false);
