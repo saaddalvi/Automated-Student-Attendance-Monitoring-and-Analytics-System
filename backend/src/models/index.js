@@ -5,6 +5,9 @@ const { Session, initSessionModel } = require('./session.model');
 const { SessionToken, initSessionTokenModel } = require('./sessionToken.model');
 const { Class, initClassModel } = require('./class.model');
 const { StudentClass, initStudentClassModel } = require('./studentClass.model');
+const { Device, initDeviceModel } = require('./device.model');
+const { DeviceResetRequest, initDeviceResetRequestModel } = require('./deviceResetRequest.model');
+const { AuditLog, initAuditLogModel } = require('./auditLog.model');
 
 // ─── Initialize Models ────────────────────────────────────────────────────────
 initUserModel(sequelize);
@@ -13,6 +16,9 @@ initSessionModel(sequelize);
 initSessionTokenModel(sequelize);
 initClassModel(sequelize);
 initStudentClassModel(sequelize);
+initDeviceModel(sequelize);
+initDeviceResetRequestModel(sequelize);
+initAuditLogModel(sequelize);
 
 // ─── Associations ─────────────────────────────────────────────────────────────
 
@@ -54,6 +60,22 @@ StudentClass.belongsTo(User, { foreignKey: 'studentId', as: 'student' });
 Class.hasMany(StudentClass, { foreignKey: 'classId', as: 'enrollments' });
 StudentClass.belongsTo(Class, { foreignKey: 'classId', as: 'class' });
 
+// User ↔ Device
+User.hasMany(Device, { foreignKey: 'userId', as: 'devices' });
+Device.belongsTo(User, { foreignKey: 'userId', as: 'user' });
+
+// User ↔ DeviceResetRequest
+User.hasMany(DeviceResetRequest, { foreignKey: 'studentId', as: 'resetRequests' });
+DeviceResetRequest.belongsTo(User, { foreignKey: 'studentId', as: 'student' });
+User.hasMany(DeviceResetRequest, { foreignKey: 'reviewedBy', as: 'reviewedResets' });
+DeviceResetRequest.belongsTo(User, { foreignKey: 'reviewedBy', as: 'reviewer' });
+
+// User ↔ AuditLog
+User.hasMany(AuditLog, { foreignKey: 'targetUserId', as: 'auditLogs' });
+AuditLog.belongsTo(User, { foreignKey: 'targetUserId', as: 'targetUser' });
+User.hasMany(AuditLog, { foreignKey: 'actorId', as: 'actorAuditLogs' });
+AuditLog.belongsTo(User, { foreignKey: 'actorId', as: 'actor' });
+
 // ─── DB Object ────────────────────────────────────────────────────────────────
 const db = {
   sequelize,
@@ -63,6 +85,9 @@ const db = {
   SessionToken,
   Class,
   StudentClass,
+  Device,
+  DeviceResetRequest,
+  AuditLog,
 };
 
 module.exports = db;

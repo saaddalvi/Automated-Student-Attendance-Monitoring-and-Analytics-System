@@ -57,6 +57,22 @@ const initSessionModel = (sequelize) => {
         allowNull: false,
         defaultValue: true,
       },
+
+      requireSameNetwork: {
+        type: DataTypes.BOOLEAN,
+        allowNull: false,
+        defaultValue: false,
+      },
+
+      teacherIp: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
+
+      networkSubnet: {
+        type: DataTypes.STRING,
+        allowNull: true,
+      },
     },
     {
       sequelize,

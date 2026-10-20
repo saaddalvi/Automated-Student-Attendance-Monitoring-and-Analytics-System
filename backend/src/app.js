@@ -55,6 +55,8 @@ const attendanceRoutes = require('./routes/attendance.routes');
 const sessionRoutes = require('./routes/session.routes');
 const classRoutes = require('./routes/class.routes');
 const studentRoutes = require('./routes/student.routes');
+const deviceRoutes = require('./routes/device.routes');
+const webauthnRoutes = require('./routes/webauthn.routes');
 
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
@@ -62,6 +64,9 @@ app.use('/api/attendance', attendanceRoutes);
 app.use('/api/session', sessionRoutes);
 app.use('/api/classes', classRoutes);
 app.use('/api/student', studentRoutes);
+app.use('/api', deviceRoutes);
+app.use('/api/webauthn', webauthnRoutes);
+
 
 // ─── 404 Handler ─────────────────────────────────────────────────────────────
 app.use((req, res) => {
@@ -75,12 +80,14 @@ app.use((err, _req, res, _next) => {
 });
 
 // ─── Start Server ─────────────────────────────────────────────────────────────
-const PORT = parseInt(process.env.PORT || '5000', 10);
+const PORT = parseInt(process.env.PORT || '5001', 10);
 
 testConnection().then(async () => {
   // Sync models → creates tables if they don't exist
   await db.sequelize.sync({ alter: true });
   console.log('Database tables synced.');
+  const { migrateLegacyDevices } = require('./utils/migrateDevices');
+  await migrateLegacyDevices();
 
   app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on http://0.0.0.0:${PORT}`);

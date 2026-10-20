@@ -29,6 +29,7 @@ export default function AuthGuard({ children, allowedRoles }: AuthGuardProps) {
         return;
       }
 
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setAuthorized(true);
     } catch {
       localStorage.removeItem("token");

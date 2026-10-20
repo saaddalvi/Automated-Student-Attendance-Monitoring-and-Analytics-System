@@ -21,6 +21,7 @@ import {
   ShieldAlert,
   Inbox,
   Download,
+  Wifi,
 } from "lucide-react";
 import AuthGuard from "../../../components/AuthGuard";
 import Skeleton from "../../../components/Skeleton";
@@ -128,6 +129,7 @@ export default function ClassDetailPage() {
   const [selectedStartTime, setSelectedStartTime] = useState("");
   const [selectedEndTime, setSelectedEndTime] = useState("");
   const [duration, setDuration] = useState(60);
+  const [requireSameNetwork, setRequireSameNetwork] = useState(false);
 
   // QR session state
   const [qrValue, setQrValue] = useState("");
@@ -140,7 +142,7 @@ export default function ClassDetailPage() {
   const [sessionExpired, setSessionExpired] = useState(false);
   const [qrRefreshing, setQrRefreshing] = useState(false);
   const [attendanceResults, setAttendanceResults] = useState<AttendanceResults | null>(null);
-  const [loadingResults, setLoadingResults] = useState(false);
+  const [, setLoadingResults] = useState(false);
 
   // Analytics state
   const [sessionHistory, setSessionHistory] = useState<SessionHistory[]>([]);
@@ -335,6 +337,7 @@ export default function ClassDetailPage() {
         classId,
         lecture: selectedLecture,
         duration,
+        requireSameNetwork,
       });
 
       const { session, token } = res.data.data;
@@ -595,7 +598,7 @@ export default function ClassDetailPage() {
                 <label className="block text-sm font-medium text-[#1E293B] mb-2">
                   QR Duration
                 </label>
-                <div className="flex gap-2 mb-6">
+                <div className="flex gap-2 mb-4">
                   {durationOptions.map((opt) => (
                     <button
                       key={opt.value}
@@ -610,6 +613,37 @@ export default function ClassDetailPage() {
                       {opt.label}
                     </button>
                   ))}
+                </div>
+
+                {/* Layer 4: Network Wi-Fi Verification Toggle */}
+                <div className="flex items-center justify-between p-3.5 mb-6 rounded-xl border border-gray-200 bg-gray-50/70">
+                  <div className="flex items-center gap-2.5">
+                    <div className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors ${requireSameNetwork ? 'bg-[#4F46E5]/10 text-[#4F46E5]' : 'bg-gray-200 text-gray-500'}`}>
+                      <Wifi size={16} />
+                    </div>
+                    <div>
+                      <span className="text-xs sm:text-sm font-semibold text-[#1E293B] block">
+                        Classroom Wi-Fi Check
+                      </span>
+                      <span className="text-[11px] text-[#64748B] block">
+                        Require students to be on same campus Wi-Fi network
+                      </span>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRequireSameNetwork(!requireSameNetwork)}
+                    disabled={isActive}
+                    className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-none ${
+                      requireSameNetwork ? "bg-[#4F46E5]" : "bg-gray-300"
+                    } disabled:opacity-50`}
+                  >
+                    <span
+                      className={`inline-block h-5 w-5 transform rounded-full bg-white shadow ring-0 transition duration-200 ease-in-out ${
+                        requireSameNetwork ? "translate-x-5" : "translate-x-0"
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 {/* Generate button */}

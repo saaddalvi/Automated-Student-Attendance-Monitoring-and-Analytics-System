@@ -10,11 +10,17 @@ import {
   XCircle,
   Loader2,
   ScanLine,
+  ShieldAlert,
+  Clock,
+  RefreshCw,
+  Wifi,
+  Fingerprint,
 } from "lucide-react";
 import AuthGuard from "../../components/AuthGuard";
 import toast from "react-hot-toast";
 import api from "../../lib/api";
-import { getDeviceId } from "../../lib/deviceId";
+import { getDevicePayload } from "../../lib/deviceId";
+import { authenticateBiometricPasskey } from "../../lib/webauthn";
 
 // Dynamic import — QR scanner uses browser APIs that break SSR
 const Scanner = dynamic(
@@ -32,20 +38,19 @@ export default function ScanPage() {
   const router = useRouter();
   const [status, setStatus] = useState<ScanStatus>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [errorCode, setErrorCode] = useState<string | null>(null);
   const [paused, setPaused] = useState(false);
   const processedRef = useRef(false);
 
   // Parse the QR value — extract sessionId and token
   const parseQR = (raw: string): { sessionId: string; token: string } | null => {
     try {
-      // Try URL format: ...?session=xxx&token=yyy
       const url = new URL(raw, "http://placeholder");
       const sessionId =
         url.searchParams.get("session") || url.searchParams.get("sessionId");
       const token = url.searchParams.get("token");
       if (sessionId && token) return { sessionId, token };
 
-      // Try JSON format: {"sessionId":"...","token":"..."}
       const json = JSON.parse(raw);
       if (json.sessionId && json.token)
         return { sessionId: json.sessionId, token: json.token };
@@ -63,17 +68,16 @@ export default function ScanPage() {
       const raw = detectedCodes[0].rawValue;
       if (!raw) return;
 
-      // Prevent duplicate processing
       processedRef.current = true;
       setPaused(true);
       setStatus("processing");
+      setErrorCode(null);
 
       const parsed = parseQR(raw);
       if (!parsed) {
         setStatus("error");
         setErrorMsg("Invalid QR code format");
         toast.error("Invalid QR code format");
-        // Allow retry after a delay
         setTimeout(() => {
           processedRef.current = false;
           setPaused(false);
@@ -83,7 +87,6 @@ export default function ScanPage() {
       }
 
       try {
-        // Get user from localStorage
         const userStr = localStorage.getItem("user");
         const user = userStr ? JSON.parse(userStr) : null;
         if (!user?.id) {
@@ -92,35 +95,60 @@ export default function ScanPage() {
           return;
         }
 
-        await api.post("/api/attendance", {
-          userId: user.id,
-          status: "present",
-          sessionId: parsed.sessionId,
-          token: parsed.token,
-          deviceId: getDeviceId(),
-        });
+        const devicePayload = await getDevicePayload();
+
+        const postAttendance = async (webauthnAssertion?: unknown) => {
+          return await api.post("/api/attendance", {
+            userId: user.id,
+            status: "present",
+            sessionId: parsed.sessionId,
+            token: parsed.token,
+            deviceId: devicePayload.deviceId,
+            fingerprintHash: devicePayload.fingerprintHash,
+            webauthnAssertion,
+          });
+        };
+
+        try {
+          await postAttendance();
+        } catch (firstErr: unknown) {
+          const err = firstErr as { response?: { status?: number; data?: { message?: string; code?: string } } };
+          if (err.response?.data?.code === "WEBAUTHN_REQUIRED") {
+            toast("Biometric verification required. Touch sensor to verify...", { icon: "👆" });
+            const bioRes = await authenticateBiometricPasskey();
+            if (bioRes.success && bioRes.assertion) {
+              await postAttendance(bioRes.assertion);
+            } else {
+              throw new Error(bioRes.message || "Biometric authentication required.");
+            }
+          } else {
+            throw firstErr;
+          }
+        }
 
         setStatus("success");
         toast.success("Attendance marked successfully!");
 
-        // Redirect after 3 seconds
         setTimeout(() => {
           router.push("/student/dashboard");
-        }, 3000);
+        }, 2500);
       } catch (error: unknown) {
-        const err = error as { response?: { status?: number; data?: { message?: string } } };
-        const msg = err.response?.data?.message || "Failed to mark attendance";
+        const err = error as { response?: { status?: number; data?: { message?: string; code?: string } }; message?: string };
+        const msg = err.response?.data?.message || err.message || "Failed to mark attendance";
+        const code = err.response?.data?.code || null;
         const statusCode = err.response?.status;
+
         setStatus("error");
         setErrorMsg(msg);
+        setErrorCode(code);
         toast.error(msg);
 
-        // If device mismatch (403), do NOT allow retry — account is locked to another device
-        if (statusCode === 403) {
+        // If device mismatch / forbidden (403), stop auto-retrying and show mismatch UI
+        if (statusCode === 403 || code) {
           return;
         }
 
-        // Allow retry after delay for other errors
+        // Allow retry after delay for transient errors
         setTimeout(() => {
           processedRef.current = false;
           setPaused(false);
@@ -136,9 +164,8 @@ export default function ScanPage() {
     setPaused(false);
     processedRef.current = false;
     setErrorMsg("");
+    setErrorCode(null);
   };
-
-  // ─── Render ─────────────────────────────────────────────────────────────────
 
   return (
     <AuthGuard allowedRoles={["student"]}>
@@ -183,9 +210,64 @@ export default function ScanPage() {
                 </div>
               </div>
 
-              {/* Scanner area */}
+              {/* Scanner or Mismatch Screen Area */}
               <div className="relative">
-                {status === "idle" ? (
+                {/* ─── Dedicated Mismatch & Security Failure Screen ─── */}
+                {status === "error" && (errorCode === "DEVICE_MISMATCH" || errorCode === "DEVICE_NOT_BOUND" || errorCode === "RESET_PENDING" || errorCode === "IP_MISMATCH" || errorCode === "WEBAUTHN_FAILED" || errorCode === "WEBAUTHN_REQUIRED") ? (
+                  <div className="p-6 sm:p-8 flex flex-col items-center text-center">
+                    <div className="w-16 h-16 rounded-2xl bg-rose-50 border border-rose-100 flex items-center justify-center text-rose-600 mb-4">
+                      {errorCode === "RESET_PENDING" ? (
+                        <Clock size={32} />
+                      ) : errorCode === "IP_MISMATCH" ? (
+                        <Wifi size={32} />
+                      ) : errorCode === "WEBAUTHN_FAILED" || errorCode === "WEBAUTHN_REQUIRED" ? (
+                        <Fingerprint size={32} />
+                      ) : (
+                        <ShieldAlert size={32} />
+                      )}
+                    </div>
+
+                    <h2 className="text-lg font-bold text-[#1E293B] mb-2">
+                      {errorCode === "DEVICE_MISMATCH" && "Device & Fingerprint Mismatch"}
+                      {errorCode === "DEVICE_NOT_BOUND" && "Device Not Bound"}
+                      {errorCode === "RESET_PENDING" && "Reset Request Under Review"}
+                      {errorCode === "IP_MISMATCH" && "Classroom Wi-Fi Network Required"}
+                      {(errorCode === "WEBAUTHN_FAILED" || errorCode === "WEBAUTHN_REQUIRED") && "Biometric Verification Required"}
+                    </h2>
+
+                    <p className="text-xs sm:text-sm text-[#64748B] leading-relaxed mb-6">
+                      {errorCode === "DEVICE_MISMATCH" &&
+                        "This device hardware or browser fingerprint does not match your registered device. To prevent proxy attendance, attendance can only be marked from your primary phone. If you changed devices, please request a device reset."}
+                      {errorCode === "DEVICE_NOT_BOUND" &&
+                        "Your account has not been bound to a verified device yet. Please log out and sign in from your primary phone."}
+                      {errorCode === "RESET_PENDING" &&
+                        "Your device reset request is currently awaiting teacher approval. Once approved, you will have 24 hours to bind this device."}
+                      {errorCode === "IP_MISMATCH" &&
+                        "Your teacher has enabled Classroom Network Verification. You must be connected to the classroom Wi-Fi network where the session was created."}
+                      {(errorCode === "WEBAUTHN_FAILED" || errorCode === "WEBAUTHN_REQUIRED") &&
+                        "Your account is protected by hardware biometric passkeys. Please scan using TouchID or FaceID to verify physical presence."}
+                    </p>
+
+                    <div className="w-full space-y-2.5">
+                      {errorCode === "DEVICE_MISMATCH" && (
+                        <button
+                          onClick={() => router.push("/student/dashboard")}
+                          className="w-full flex items-center justify-center gap-2 bg-[#4F46E5] hover:bg-[#4338CA] text-white text-sm font-semibold py-3 px-4 rounded-xl shadow-md transition-all cursor-pointer"
+                        >
+                          <RefreshCw size={16} />
+                          Go to Dashboard & Request Reset
+                        </button>
+                      )}
+
+                      <button
+                        onClick={startScanning}
+                        className="w-full flex items-center justify-center gap-2 bg-gray-100 hover:bg-gray-200 text-[#1E293B] text-sm font-medium py-3 px-4 rounded-xl transition-all cursor-pointer"
+                      >
+                        Try Scanning Again
+                      </button>
+                    </div>
+                  </div>
+                ) : status === "idle" ? (
                   /* ─── Start state ─── */
                   <div className="flex flex-col items-center justify-center py-16 px-6">
                     <div className="w-20 h-20 rounded-2xl bg-[#4F46E5]/5 flex items-center justify-center mb-5">
@@ -216,9 +298,8 @@ export default function ScanPage() {
                     </p>
                   </div>
                 ) : (
-                  /* ─── Scanner / Processing / Error states ─── */
+                  /* ─── Scanner Feed ─── */
                   <>
-                    {/* Video feed */}
                     <div className="relative aspect-square bg-black">
                       <Scanner
                         onScan={handleScan}
@@ -232,10 +313,8 @@ export default function ScanPage() {
                         }}
                       />
 
-                      {/* Scanning overlay */}
                       {status === "scanning" && (
                         <div className="absolute inset-0 pointer-events-none">
-                          {/* Corner brackets */}
                           <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2">
                             <div className="absolute top-0 left-0 w-8 h-8 border-t-3 border-l-3 border-[#4F46E5] rounded-tl-lg" />
                             <div className="absolute top-0 right-0 w-8 h-8 border-t-3 border-r-3 border-[#4F46E5] rounded-tr-lg" />
@@ -243,14 +322,12 @@ export default function ScanPage() {
                             <div className="absolute bottom-0 right-0 w-8 h-8 border-b-3 border-r-3 border-[#4F46E5] rounded-br-lg" />
                           </div>
 
-                          {/* Scan line animation */}
                           <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2 overflow-hidden">
                             <div className="w-full h-0.5 bg-[#4F46E5] shadow-[0_0_8px_rgba(79,70,229,0.6)] animate-[scanline_2s_ease-in-out_infinite]" />
                           </div>
                         </div>
                       )}
 
-                      {/* Processing overlay */}
                       {status === "processing" && (
                         <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
                           <Loader2 size={32} className="text-white animate-spin mb-3" />
@@ -260,9 +337,8 @@ export default function ScanPage() {
                         </div>
                       )}
 
-                      {/* Error overlay */}
                       {status === "error" && (
-                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center">
+                        <div className="absolute inset-0 bg-black/60 flex flex-col items-center justify-center p-6 text-center">
                           <XCircle size={32} className="text-[#F43F5E] mb-3" />
                           <p className="text-white text-sm font-medium mb-1">
                             {errorMsg}
@@ -274,7 +350,6 @@ export default function ScanPage() {
                       )}
                     </div>
 
-                    {/* Status bar below video */}
                     <div className="px-6 py-4 bg-[#F8FAFC] border-t border-gray-100">
                       <div className="flex items-center gap-2">
                         {status === "scanning" && (
@@ -293,14 +368,6 @@ export default function ScanPage() {
                             </span>
                           </>
                         )}
-                        {status === "error" && (
-                          <>
-                            <div className="w-2 h-2 rounded-full bg-[#F43F5E]" />
-                            <span className="text-xs font-medium text-[#F43F5E]">
-                              {errorMsg} — retrying…
-                            </span>
-                          </>
-                        )}
                       </div>
                     </div>
                   </>
@@ -310,7 +377,6 @@ export default function ScanPage() {
           </div>
         </main>
 
-        {/* Scan line keyframe */}
         <style jsx>{`
           @keyframes scanline {
             0%, 100% { transform: translateY(0); }

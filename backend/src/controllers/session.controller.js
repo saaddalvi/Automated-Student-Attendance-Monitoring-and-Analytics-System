@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const db = require('../models');
+const { getClientIp, normalizeIp } = require('../utils/deviceSecurity');
 
 const { Session, SessionToken } = db;
 
@@ -18,7 +19,7 @@ const generateRandomToken = () => crypto.randomBytes(16).toString('hex');
 
 const createSession = async (req, res) => {
   try {
-    const { classId, courseId, lecture, duration } = req.body;
+    const { classId, courseId, lecture, duration, requireSameNetwork } = req.body;
     const resolvedClassId = classId || courseId; // accept both names
 
     if (!resolvedClassId || !lecture || !duration) {
@@ -31,6 +32,8 @@ const createSession = async (req, res) => {
     }
 
     const expiresAt = new Date(Date.now() + durationSec * 1000);
+    const rawTeacherIp = getClientIp(req);
+    const teacherIp = normalizeIp(rawTeacherIp);
 
     const session = await Session.create({
       classId: resolvedClassId,
@@ -39,6 +42,8 @@ const createSession = async (req, res) => {
       createdBy: req.user.id,
       expiresAt,
       isActive: true,
+      requireSameNetwork: Boolean(requireSameNetwork),
+      teacherIp,
     });
 
     // Generate the first token

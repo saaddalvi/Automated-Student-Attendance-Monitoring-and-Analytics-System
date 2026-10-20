@@ -1,10 +1,11 @@
 "use client";
 
-import { useState, FormEvent } from "react";
-import { LogIn, Eye, EyeOff, Loader2 } from "lucide-react";
+import { useState, useEffect, FormEvent } from "react";
+import { LogIn, Eye, EyeOff, Loader2, ShieldCheck } from "lucide-react";
 import api from "../lib/api";
 import axios from "axios";
 import toast from "react-hot-toast";
+import { initAndSyncDeviceId, getDevicePayload } from "../lib/deviceId";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -12,6 +13,10 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+
+  useEffect(() => {
+    initAndSyncDeviceId().catch(() => {});
+  }, []);
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -24,13 +29,30 @@ export default function LoginPage() {
 
     setLoading(true);
     try {
-      const res = await api.post("/api/auth/login", { email, password });
+      const devicePayload = await getDevicePayload();
+      const res = await api.post("/api/auth/login", {
+        email,
+        password,
+        ...devicePayload,
+      });
 
-      const { token, user } = res.data.data;
+      const { token, user, deviceStatus } = res.data.data;
       localStorage.setItem("token", token);
       localStorage.setItem("user", JSON.stringify(user));
+      if (deviceStatus) {
+        localStorage.setItem("deviceStatus", deviceStatus);
+      }
 
-      toast.success("Welcome back!");
+      if (deviceStatus === "mismatch") {
+        toast("Notice: This device is not bound to your account. You can view stats, but will need to request a device reset to mark attendance.", {
+          icon: "⚠️",
+          duration: 5000,
+        });
+      } else if (deviceStatus === "duplicate") {
+        toast.error("Security alert: This device is registered to another student account.");
+      } else {
+        toast.success("Welcome back!");
+      }
 
       // Redirect based on role
       if (user.role === "teacher" || user.role === "admin") {
@@ -194,6 +216,14 @@ export default function LoginPage() {
               Register
             </a>
           </p>
+
+          {/* Privacy & Device Binding Notice (DPDP Act 2023) */}
+          <div className="mt-6 pt-4 border-t border-gray-100 flex items-start gap-2 text-xs text-[#94A3B8]">
+            <ShieldCheck size={14} className="mt-0.5 shrink-0 text-[#4F46E5]" />
+            <p>
+              <strong className="text-[#64748B]">Device Binding Notice:</strong> To prevent attendance proxy fraud, your browser identifier and platform signals are secured in compliance with the Digital Personal Data Protection (DPDP) Act 2023.
+            </p>
+          </div>
         </div>
       </div>
     </div>

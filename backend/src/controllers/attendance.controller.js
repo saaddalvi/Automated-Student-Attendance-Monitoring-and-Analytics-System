@@ -1,15 +1,17 @@
 const { UniqueConstraintError, ValidationError, Op } = require('sequelize');
 const db = require('../models');
 
-const { Attendance, User, Session, SessionToken, Class, StudentClass } = db;
+const { Attendance, User, Session, SessionToken, Class, StudentClass, Device, DeviceResetRequest } = db;
+const { verifyDeviceHash, logAuditEvent, getClientIp, isSameSubnetOrNetwork } = require('../utils/deviceSecurity');
+const { verifyWebAuthnAssertionDirect } = require('./webauthn.controller');
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 const ok = (res, data, message, status = 200) =>
   res.status(status).json({ success: true, data, message });
 
-const fail = (res, message, status = 400) =>
-  res.status(status).json({ success: false, data: null, message });
+const fail = (res, message, status = 400, code = null) =>
+  res.status(status).json({ success: false, data: null, message, ...(code ? { code } : {}) });
 
 /** Returns today in YYYY-MM-DD format */
 const today = () => new Date().toISOString().split('T')[0];
@@ -18,7 +20,7 @@ const today = () => new Date().toISOString().split('T')[0];
 
 const markAttendance = async (req, res) => {
   try {
-    const { userId, date, status, sessionId, token, deviceId } = req.body;
+    const { userId, date, status, sessionId, token, deviceId, fingerprintHash, webauthnAssertion } = req.body;
 
     if (!userId || !status) {
       fail(res, 'Fields userId and status are required.');
@@ -70,28 +72,126 @@ const markAttendance = async (req, res) => {
         return;
       }
 
-      // ─── Device binding validation (QR-based attendance only) ───────────
+      // ─── Layer 4: Classroom Network / IP Check ────────────────────────
+      if (session.requireSameNetwork && session.teacherIp) {
+        const studentIp = getClientIp(req);
+        const isNetworkMatch = isSameSubnetOrNetwork(studentIp, session.teacherIp);
+        if (!isNetworkMatch) {
+          await logAuditEvent({
+            actorId: userId,
+            targetUserId: userId,
+            action: 'IP_MISMATCH',
+            metadata: {
+              sessionId,
+              studentIp,
+              teacherIp: session.teacherIp,
+              message: 'Scan rejected: network mismatch',
+            },
+            ip: studentIp,
+          });
+          fail(
+            res,
+            'Classroom network verification failed. You must be connected to the classroom Wi-Fi network.',
+            403,
+            'IP_MISMATCH'
+          );
+          return;
+        }
+      }
+
+      // ─── Layer 1 & 2: Device & Browser Fingerprint Validation ─────────
       if (!deviceId) {
-        fail(res, 'Device ID is required for attendance.');
+        fail(res, 'Device ID is required for attendance.', 403, 'DEVICE_NOT_BOUND');
         return;
       }
 
-      // Fetch user with all fields (bypass defaultScope that excludes password)
-      const studentUser = await User.findByPk(userId);
-      if (!studentUser) {
-        fail(res, 'User not found.', 404);
+      // Check if student has an active device
+      const activeDevice = await Device.findOne({
+        where: { userId, status: 'active' },
+      });
+
+      if (!activeDevice) {
+        fail(
+          res,
+          'No verified device bound to this account. Please log in from your primary device first.',
+          403,
+          'DEVICE_NOT_BOUND'
+        );
         return;
       }
 
-      if (!studentUser.deviceId) {
-        // First attendance — bind this device to the account
-        await studentUser.update({ deviceId });
-      } else if (studentUser.deviceId !== deviceId) {
-        // Different device — block attendance
-        fail(res, 'This account is already linked to another device. If you changed your device, contact your teacher or admin.', 403);
+      // Check if student has a pending reset request
+      const pendingReset = await DeviceResetRequest.findOne({
+        where: { studentId: userId, status: 'pending' },
+      });
+      if (pendingReset) {
+        fail(
+          res,
+          'You have a pending device reset request awaiting teacher approval.',
+          403,
+          'RESET_PENDING'
+        );
         return;
       }
-      // ─── End device binding validation ──────────────────────────────────
+
+      // Verify deviceId + fingerprintHash against activeDevice.deviceHash using constant-time comparison
+      const isDeviceValid = verifyDeviceHash(deviceId, activeDevice.deviceHash, fingerprintHash);
+      if (!isDeviceValid) {
+        await logAuditEvent({
+          actorId: userId,
+          targetUserId: userId,
+          action: 'DEVICE_MISMATCH',
+          metadata: { sessionId, message: 'Scan rejected: device or browser fingerprint mismatch' },
+          ip: getClientIp(req),
+        });
+        fail(
+          res,
+          'This device does not match your registered device.',
+          403,
+          'DEVICE_MISMATCH'
+        );
+        return;
+      }
+
+      // ─── Layer 3: WebAuthn Biometric Verification ─────────────────────
+      if (activeDevice.hasWebAuthn) {
+        if (!webauthnAssertion) {
+          fail(
+            res,
+            'Biometric verification required. Please confirm with TouchID/FaceID.',
+            403,
+            'WEBAUTHN_REQUIRED'
+          );
+          return;
+        }
+
+        const assertionResult = await verifyWebAuthnAssertionDirect({
+          userId,
+          req,
+          assertionResponse: webauthnAssertion,
+        });
+
+        if (!assertionResult.verified) {
+          await logAuditEvent({
+            actorId: userId,
+            targetUserId: userId,
+            action: 'WEBAUTHN_FAILED',
+            metadata: { sessionId, reason: assertionResult.reason },
+            ip: getClientIp(req),
+          });
+          fail(
+            res,
+            'Biometric verification failed. Please try again.',
+            403,
+            'WEBAUTHN_FAILED'
+          );
+          return;
+        }
+      }
+
+      // Update lastSeenAt for the active device
+      await activeDevice.update({ lastSeenAt: new Date() });
+      // ─── End security layer validations ─────────────────────────────────
 
       // Extract classId and lecture from the session
       classId = session.classId;

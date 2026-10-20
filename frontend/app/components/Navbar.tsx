@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Menu, X } from "lucide-react";
 
 export default function Navbar() {
@@ -10,12 +11,12 @@ export default function Navbar() {
     <nav className="sticky top-0 z-50 backdrop-blur-md bg-[#F8FAFC]/80 border-b border-gray-100">
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         {/* Logo */}
-        <a href="/" className="flex items-center gap-2">
+        <Link href="/" className="flex items-center gap-2">
           <div className="w-8 h-8 rounded-lg bg-[#4F46E5] flex items-center justify-center">
             <span className="text-white font-bold text-sm">A</span>
           </div>
           <span className="text-lg font-bold text-[#1E293B]">AttendEase</span>
-        </a>
+        </Link>
 
         {/* Desktop buttons */}
         <div className="hidden md:flex items-center gap-3">
